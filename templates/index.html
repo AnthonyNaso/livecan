@@ -155,8 +155,25 @@
           s = b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t, s);
         })(window, document, "script");
+        // inicializa o pixel imediatamente (o stub criado acima aceita chamadas enfileiradas)
+        try {
+          if (typeof fbq === "function") {
+            fbq("init", window.META_PIXEL_ID);
+            fbq("track", "PageView");
+          }
+        } catch (e) {
+          // falha silenciosa
+        }
       }
     </script>
+    <noscript>
+      <img
+        height="1"
+        width="1"
+        style="display: none"
+        src="https://www.facebook.com/tr?id={{ config['META_PIXEL_ID'] }}&ev=PageView&noscript=1"
+      />
+    </noscript>
     <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
   </body>
