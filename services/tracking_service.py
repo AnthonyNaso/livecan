@@ -57,7 +57,7 @@ class TrackingService:
                     "event_name": event_name,
                     "event_time": event_time,
                     "event_id": event_id,
-                    "event_source_url": payload.get("page_url") or "https://localhost",
+                    "event_source_url": payload.get("page_url") or "https://livecan.com.br",
                     "custom_data": custom_data,
                     "user_data": {},
                 }
