@@ -71,6 +71,23 @@ def track_pageview():
     return jsonify({"ok": ok, "detail": detail})
 
 
+@app.route("/debug/pixel", methods=["GET"])
+def debug_pixel():
+    """Rota de debug leve para checar o META_PIXEL_ID exposto pelo servidor.
+
+    Não retorna tokens ou segredos — apenas o ID do pixel e um booleano indicando
+    se está presente.
+    """
+    from config import Config as _Config
+
+    return jsonify(
+        {
+            "META_PIXEL_ID": _Config.META_PIXEL_ID,
+            "has_pixel": bool(_Config.META_PIXEL_ID),
+        }
+    )
+
+
 @app.route("/pix/create", methods=["POST"])
 def pix_create():
     data = request.get_json(silent=True) or {}
