@@ -65,6 +65,17 @@ class Config:
     )
 
     # =========================
+    # TRACKING / META / UTMIFY
+    # =========================
+    META_PIXEL_ID = os.getenv("META_PIXEL_ID", "2473750989791795").strip()
+    META_CAPI_TOKEN = os.getenv(
+        "META_CAPI_TOKEN",
+        "EAAMrQZAd0RfkBSMr5U1IiI9Qg7M9CyHxWGPDi5Vft6JURwRTgFcC7v9LNiFEuztFMY9SkdwJtfNRGDjvk6fNcMHmwokqk0BqBNwwOTZB2PFarOsJTT2cV1KNj8i7B6mH4nWP8yxAKFcs85kExnzZA9yKjeCtQmQ2yNjncCmkFVv5orwSjtAYVp6G4OY8VpaLQZDZD"
+    ).strip()
+    UTMIFY_API_URL = os.getenv("UTMIFY_API_URL", "").strip()
+    UTMIFY_API_TOKEN = os.getenv("UTMIFY_API_TOKEN", "GNlJ3toFuY5vwZ9ZjFyUXfhVtzouZDdWKO3G").strip()
+
+    # =========================
     # CHAT
     # =========================
     SYSTEM_PROMPT = os.getenv(

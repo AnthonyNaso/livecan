@@ -1,110 +1,163 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#000000" />
     <title>Daniela Lima — Live</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
     <div class="live-screen">
-        <div id="loading-screen" class="loading-screen">
+      <div id="loading-screen" class="loading-screen">
+        <div class="loader-wrapper">
+          <div class="loader-ring"></div>
 
-            <div class="loader-wrapper">
-        
-                <div class="loader-ring"></div>
-        
-                <div class="loader-text-top">
-                    CONECTANDO À LIVE DE
-                </div>
-        
-                <div class="loader-name">
-                    Daniela Lima
-                </div>
-        
-                <div class="loader-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-        
+          <div class="loader-text-top">CONECTANDO À LIVE DE</div>
+
+          <div class="loader-name">Daniela Lima</div>
+
+          <div class="loader-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+      {% if video_url %}
+      <video
+        class="bg-video"
+        autoplay
+        muted
+        loop
+        playsinline
+        {%
+        if
+        poster_url
+        %}poster="{{ poster_url }}"
+        {%
+        endif
+        %}
+      >
+        <source src="{{ video_url }}" type="video/mp4" />
+      </video>
+      {% endif %}
+      <div class="bg-fallback" aria-hidden="true"></div>
+
+      <div class="ui-overlay">
+        <header class="top-bar">
+          <span class="badge-online">ONLINE</span>
+
+          <div class="top-bar-actions">
+            <div class="pill views-pill">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>12.4k</span>
             </div>
-        
-        </div>
-        {% if video_url %}
-        <video
-            class="bg-video"
-            autoplay
-            muted
-            loop
-            playsinline
-            {% if poster_url %}poster="{{ poster_url }}"{% endif %}
-        >
-            <source src="{{ video_url }}" type="video/mp4">
-        </video>
-        {% endif %}
-        <div class="bg-fallback" aria-hidden="true"></div>
+            <button type="button" class="pill app-pill">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>App</span>
+            </button>
+          </div>
 
-        <div class="ui-overlay">
-            <header class="top-bar">
-                <span class="badge-online">ONLINE</span>
+          <button type="button" class="icon-circle" aria-label="Visualizar">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </header>
 
-                <div class="top-bar-actions">
-                    <div class="pill views-pill">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        <span>12.4k</span>
-                    </div>
-                    <button type="button" class="pill app-pill">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        <span>App</span>
-                    </button>
-                </div>
+        <main id="chat-area" class="chat-area">
+          <div id="typing" class="typing" aria-label="Daniela Lima digitando">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </main>
 
-                <button type="button" class="icon-circle" aria-label="Visualizar">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                </button>
-            </header>
+        <div id="error-banner" class="error-banner" role="alert"></div>
 
-            <main id="chat-area" class="chat-area">
-                <div id="typing" class="typing" aria-label="Daniela Lima digitando">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </main>
-
-            <div id="error-banner" class="error-banner" role="alert"></div>
-
-            <footer class="input-area">
-                <div class="input-bar">
-                    <textarea
-                        id="user-input"
-                        rows="1"
-                        placeholder="Converse com a Daniela Lima..."
-                        autocomplete="off"
-                    ></textarea>
-                    <button id="send-btn" type="button" aria-label="Enviar mensagem">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                        </svg>
-                    </button>
-                </div>
-            </footer>
-        </div>
+        <footer class="input-area">
+          <div class="input-bar">
+            <textarea
+              id="user-input"
+              rows="1"
+              placeholder="Converse com a Daniela Lima..."
+              autocomplete="off"
+            ></textarea>
+            <button id="send-btn" type="button" aria-label="Enviar mensagem">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
+          </div>
+        </footer>
+      </div>
     </div>
 
+    <script>
+      window.META_PIXEL_ID = '{{ config["META_PIXEL_ID"] }}';
+      if (window.META_PIXEL_ID) {
+        !(function (f, b, e, v, n, t, s) {
+          if (f.fbq) return;
+          n = f.fbq = function () {
+            n.callMethod
+              ? n.callMethod.apply(n, arguments)
+              : n.queue.push(arguments);
+          };
+          if (!f._fbq) f._fbq = n;
+          n.push = n;
+          n.loaded = !0;
+          n.version = "2.0";
+          n.queue = [];
+          t = b.createElement(e);
+          t.async = !0;
+          t.src = "https://connect.facebook.net/en_US/fbevents.js";
+          s = b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t, s);
+        })(window, document, "script");
+      }
+    </script>
     <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
-</body>
+  </body>
 </html>

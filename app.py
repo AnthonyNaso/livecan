@@ -4,6 +4,7 @@ from config import Config
 from services.grok_service import chat_with_grok
 from services.pix_service import create_pix_charge, get_pix_status
 from services.pushinpay_service import create_checkout, get_checkout_status
+from services.tracking_service import TrackingService
 
 app = Flask(__name__)
 
@@ -45,6 +46,28 @@ def chat():
         return jsonify({"response": reply})
     except Exception as exc:
         return jsonify({"error": f"Erro ao contactar a IA: {exc}"}), 502
+
+
+@app.route("/track", methods=["POST"])
+def track_event():
+    data = request.get_json(silent=True) or {}
+    event_name = (data.get("event_name") or "PageView").strip()
+    payload = data.get("payload") or {}
+    ok, detail = TrackingService.send_event(event_name, payload, request_context=request)
+    return jsonify({"ok": ok, "event_name": event_name, "detail": detail})
+
+
+@app.route("/track/pageview", methods=["GET"])
+def track_pageview():
+    ok, detail = TrackingService.send_event(
+        "PageView",
+        {
+            "page": request.args.get("page", "home"),
+            "page_url": request.args.get("page_url") or request.url,
+        },
+        request_context=request,
+    )
+    return jsonify({"ok": ok, "detail": detail})
 
 
 @app.route("/pix/create", methods=["POST"])

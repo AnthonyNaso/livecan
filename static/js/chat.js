@@ -31,6 +31,69 @@ const typingIndicator = document.getElementById("typing");
 const errorBanner = document.getElementById("error-banner");
 const bgVideo = document.querySelector(".bg-video");
 
+function getPlanAmount(planId) {
+  const amount = VIP_PLAN_PRICES[planId] || VIDEO_CALL_PLAN_PRICES[planId];
+  if (!amount) return null;
+  const parsed = Number.parseFloat(String(amount).replace(",", "."));
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function initMetaPixel() {
+  if (!window.META_PIXEL_ID || window.__metaPixelInitialized) return;
+  window.__metaPixelInitialized = true;
+  if (typeof window.fbq === "function") {
+    window.fbq("init", window.META_PIXEL_ID);
+  }
+}
+
+function sendTrackingEvent(eventName, payload = {}) {
+  const eventPayload = {
+    page: payload.page || "home",
+    page_url: payload.page_url || window.location.href,
+    ...payload,
+  };
+
+  if (typeof window.fbq === "function") {
+    if (eventName === "PageView") {
+      window.fbq("track", "PageView");
+    }
+    if (eventName === "Purchase") {
+      window.fbq("track", "Purchase", {
+        value: eventPayload.value || 0,
+        currency: eventPayload.currency || "BRL",
+      });
+    }
+  }
+
+  fetch("/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_name: eventName, payload: eventPayload }),
+  }).catch(() => {});
+}
+
+function trackPageView() {
+  initMetaPixel();
+  sendTrackingEvent("PageView", {
+    page: "home",
+    page_url: window.location.href,
+  });
+}
+
+function trackPurchase(planId, amount) {
+  initMetaPixel();
+  const numericAmount =
+    typeof amount === "number" ? amount : getPlanAmount(planId);
+  const payload = {
+    page: "purchase",
+    page_url: window.location.href,
+    plan_id: planId,
+    value: numericAmount,
+    currency: "BRL",
+  };
+  sendTrackingEvent("Purchase", payload);
+}
+
 let history = [];
 let isSending = false;
 let currentPlanId = null;
@@ -475,6 +538,7 @@ function createVipPopup() {
         if (paidSignals.includes(nextStatus)) {
           if (pushinpayInterval) clearInterval(pushinpayInterval);
           markPaymentConfirmed();
+          trackPurchase(currentPlanId, getPlanAmount(currentPlanId));
           hideVipButton();
           setTimeout(() => {
             hidePaymentPopup();
@@ -1031,14 +1095,14 @@ function loadVideoCallPayment(planId) {
       if (!ok || body.error) {
         throw new Error(body.error || "Erro ao criar checkout PushinPay.");
       }
-      renderVideoCallPushinpayModal(body);
+      renderVideoCallPushinpayModal(body, planId);
     })
     .catch((err) => {
       container.innerHTML = `<div class="pix-error">${err.message}</div>`;
     });
 }
 
-function renderVideoCallPushinpayModal(data) {
+function renderVideoCallPushinpayModal(data, planId = "video-call") {
   const popup = document.getElementById("video-call-payment-popup");
   if (!popup) return;
   const container = popup.querySelector(".pix-content");
@@ -1111,6 +1175,7 @@ function renderVideoCallPushinpayModal(data) {
         ) {
           clearInterval(videoCallInterval);
           videoCallInterval = null;
+          trackPurchase(planId, getPlanAmount(planId));
           hideVideoCallPaymentPopup();
           hideVideoCallButton();
 
@@ -1401,6 +1466,7 @@ function restoreSession() {
 
 window.addEventListener("load", () => {
   const loader = document.getElementById("loading-screen");
+  trackPageView();
 
   setTimeout(() => {
     loader.classList.add("hide");
