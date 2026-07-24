@@ -15,6 +15,7 @@ def index():
         "index.html",
         video_url=Config.BACKGROUND_VIDEO_URL,
         poster_url=Config.BACKGROUND_POSTER_URL,
+        config={"META_PIXEL_ID": Config.META_PIXEL_ID},
     )
 
 
