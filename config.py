@@ -75,6 +75,9 @@ class Config:
     UTMIFY_API_URL = os.getenv("UTMIFY_API_URL", "").strip()
     UTMIFY_API_TOKEN = os.getenv("UTMIFY_API_TOKEN", "GNlJ3toFuY5vwZ9ZjFyUXfhVtzouZDdWKO3G").strip()
 
+    # Microsoft Clarity
+    CLARITY_PROJECT_ID = os.getenv("CLARITY_PROJECT_ID", "").strip()
+
     # =========================
     # CHAT
     # =========================

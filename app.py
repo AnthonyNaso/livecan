@@ -15,7 +15,10 @@ def index():
         "index.html",
         video_url=Config.BACKGROUND_VIDEO_URL,
         poster_url=Config.BACKGROUND_POSTER_URL,
-        config={"META_PIXEL_ID": Config.META_PIXEL_ID},
+        config={
+            "META_PIXEL_ID": Config.META_PIXEL_ID,
+            "CLARITY_PROJECT_ID": Config.CLARITY_PROJECT_ID,
+        },
     )
 
 
@@ -80,10 +83,13 @@ def debug_pixel():
     """
     from config import Config as _Config
 
+    clarity_id = getattr(_Config, "CLARITY_PROJECT_ID", None)
     return jsonify(
         {
             "META_PIXEL_ID": _Config.META_PIXEL_ID,
+            "CLARITY_PROJECT_ID": clarity_id,
             "has_pixel": bool(_Config.META_PIXEL_ID),
+            "has_clarity": bool(clarity_id),
         }
     )
 
