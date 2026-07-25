@@ -12,8 +12,11 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
     />
+
+    <!-- Microsoft Clarity -->
     {% if config["CLARITY_PROJECT_ID"] %}
     <script type="text/javascript">
+      window.CLARITY_PROJECT_ID = "{{ config['CLARITY_PROJECT_ID'] }}";
       (function (c, l, a, r, i, t, y) {
         c[a] =
           c[a] ||
@@ -156,9 +159,9 @@
       </div>
     </div>
 
+    <!-- Meta Pixel -->
     <script>
       window.META_PIXEL_ID = '{{ config["META_PIXEL_ID"] }}';
-      window.CLARITY_PROJECT_ID = '{{ config["CLARITY_PROJECT_ID"] }}';
       if (window.META_PIXEL_ID) {
         !(function (f, b, e, v, n, t, s) {
           if (f.fbq) return;
@@ -178,7 +181,7 @@
           s = b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t, s);
         })(window, document, "script");
-        // inicializa o pixel imediatamente (o stub criado acima aceita chamadas enfileiradas)
+
         try {
           if (typeof fbq === "function") {
             fbq("init", window.META_PIXEL_ID);
@@ -189,6 +192,7 @@
         }
       }
     </script>
+    {% if config["META_PIXEL_ID"] %}
     <noscript>
       <img
         height="1"
@@ -197,6 +201,8 @@
         src="https://www.facebook.com/tr?id={{ config['META_PIXEL_ID'] }}&ev=PageView&noscript=1"
       />
     </noscript>
+    {% endif %}
+
     <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
   </body>
