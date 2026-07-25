@@ -65,6 +65,19 @@ class Config:
     )
 
     # =========================
+    # HOTTRACK (PIX + TRACKING)
+    # =========================
+    HOTTRACK_BASE_URL = os.getenv(
+        "HOTTRACK_BASE_URL",
+        "https://hot-track.com"
+    ).strip()
+
+    HOTTRACK_API_KEY = os.getenv(
+        "HOTTRACK_API_KEY",
+        ""
+    ).strip()
+
+    # =========================
     # TRACKING / META / UTMIFY
     # =========================
     META_PIXEL_ID = os.getenv("META_PIXEL_ID", "2473750989791795").strip()

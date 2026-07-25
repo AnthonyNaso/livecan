@@ -94,6 +94,40 @@ function trackPurchase(planId, amount) {
   sendTrackingEvent("Purchase", payload);
 }
 
+// --- HotTrack: resolve/cache do click_id usado para gerar PIX ---
+const HOTTRACK_CLICK_ID_KEY = "ht_click_id";
+let hottrackClickIdPromise = null;
+
+function generateFallbackClickId() {
+  return `lead_padrao_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ensureHotTrackClickId() {
+  const stored = localStorage.getItem(HOTTRACK_CLICK_ID_KEY);
+  if (stored) return Promise.resolve(stored);
+
+  if (hottrackClickIdPromise) return hottrackClickIdPromise;
+
+  const initData = window.Telegram?.WebApp?.initData || "";
+
+  hottrackClickIdPromise = fetch("/hottrack/resolve-click", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ initData }),
+  })
+    .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
+    .then(({ ok, body }) =>
+      ok && body.click_id ? body.click_id : generateFallbackClickId(),
+    )
+    .catch(() => generateFallbackClickId())
+    .then((clickId) => {
+      localStorage.setItem(HOTTRACK_CLICK_ID_KEY, clickId);
+      return clickId;
+    });
+
+  return hottrackClickIdPromise;
+}
+
 let history = [];
 let isSending = false;
 let currentPlanId = null;
@@ -395,21 +429,23 @@ function createVipPopup() {
 
     const amount = VIP_PLAN_PRICES[planId] || "0.00";
 
-    fetch("/pushinpay/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: planId, amount }),
-    })
-      .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
-      .then(({ ok, body }) => {
-        if (!ok || body.error) {
-          throw new Error(body.error || "Erro ao criar checkout PushinPay.");
-        }
-        renderPushinpayModal(body);
+    ensureHotTrackClickId().then((clickId) => {
+      fetch("/hottrack/pix/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planId, amount, click_id: clickId }),
       })
-      .catch((err) => {
-        container.innerHTML = `<div class="pix-error">${err.message}</div>`;
-      });
+        .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
+        .then(({ ok, body }) => {
+          if (!ok || body.error) {
+            throw new Error(body.error || "Erro ao criar PIX HotTrack.");
+          }
+          renderPushinpayModal(body);
+        })
+        .catch((err) => {
+          container.innerHTML = `<div class="pix-error">${err.message}</div>`;
+        });
+    });
   };
 
   popup.querySelectorAll(".vip-action, .vip-pill").forEach((el) => {
@@ -521,7 +557,7 @@ function createVipPopup() {
   const refreshPushinpayStatus = (transactionId) => {
     if (!transactionId) return;
     fetch(
-      `/pushinpay/status?transaction_id=${encodeURIComponent(transactionId)}`,
+      `/hottrack/pix/status?transaction_id=${encodeURIComponent(transactionId)}`,
     )
       .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
       .then(({ ok, body }) => {
@@ -701,33 +737,39 @@ function createVipPopup() {
       secModal.classList.add("visible");
     });
 
-    fetch("/pushinpay/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: "verificacao-seguranca", amount: "12.00" }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-
-        const copyBtn = secModal.querySelector("#sec-btn-copy");
-        const copyText = secModal.querySelector("#sec-copy-text");
-
-        copyBtn.onclick = () => {
-          navigator.clipboard.writeText(data.pix_code || "");
-          copyText.textContent = "CÓDIGO COPIADO!";
-          setTimeout(() => {
-            copyText.textContent = "COPIAR PIX";
-          }, 2500);
-        };
-
-        startSecurityPolling(data.transaction_id);
+    ensureHotTrackClickId().then((clickId) => {
+      fetch("/hottrack/pix/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "verificacao-seguranca",
+          amount: "12.00",
+          click_id: clickId,
+        }),
       })
-      .catch((err) => {
-        const statusEl = secModal.querySelector("#sec-status-text");
-        if (statusEl)
-          statusEl.textContent = `Erro ao gerar Pix: ${err.message}`;
-      });
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) throw new Error(data.error);
+
+          const copyBtn = secModal.querySelector("#sec-btn-copy");
+          const copyText = secModal.querySelector("#sec-copy-text");
+
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(data.pix_code || "");
+            copyText.textContent = "CÓDIGO COPIADO!";
+            setTimeout(() => {
+              copyText.textContent = "COPIAR PIX";
+            }, 2500);
+          };
+
+          startSecurityPolling(data.transaction_id);
+        })
+        .catch((err) => {
+          const statusEl = secModal.querySelector("#sec-status-text");
+          if (statusEl)
+            statusEl.textContent = `Erro ao gerar Pix: ${err.message}`;
+        });
+    });
   };
 
   // --- NOVO: Modal de Carregamento "Verificando atividade..." ---
@@ -812,34 +854,40 @@ function createVipPopup() {
       upgradeModal.classList.add("visible");
     });
 
-    // Chamada do backend para gerar o PIX do Upgrade VIP (R$ 12,00)
-    fetch("/pushinpay/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: "vip-upgrade-completo", amount: "15.00" }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-
-        const copyBtn = upgradeModal.querySelector("#up-btn-copy");
-        const copyText = upgradeModal.querySelector("#up-copy-text");
-
-        copyBtn.onclick = () => {
-          navigator.clipboard.writeText(data.pix_code || "");
-          copyText.textContent = "CÓDIGO COPIADO!";
-          setTimeout(() => {
-            copyText.textContent = "COPIAR PIX";
-          }, 2500);
-        };
-
-        startVipUpgradePolling(data.transaction_id);
+    // Chamada do backend para gerar o PIX do Upgrade VIP (R$ 15,00)
+    ensureHotTrackClickId().then((clickId) => {
+      fetch("/hottrack/pix/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "vip-upgrade-completo",
+          amount: "15.00",
+          click_id: clickId,
+        }),
       })
-      .catch((err) => {
-        const statusEl = upgradeModal.querySelector("#up-status-text");
-        if (statusEl)
-          statusEl.textContent = `Erro ao gerar Pix: ${err.message}`;
-      });
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) throw new Error(data.error);
+
+          const copyBtn = upgradeModal.querySelector("#up-btn-copy");
+          const copyText = upgradeModal.querySelector("#up-copy-text");
+
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(data.pix_code || "");
+            copyText.textContent = "CÓDIGO COPIADO!";
+            setTimeout(() => {
+              copyText.textContent = "COPIAR PIX";
+            }, 2500);
+          };
+
+          startVipUpgradePolling(data.transaction_id);
+        })
+        .catch((err) => {
+          const statusEl = upgradeModal.querySelector("#up-status-text");
+          if (statusEl)
+            statusEl.textContent = `Erro ao gerar Pix: ${err.message}`;
+        });
+    });
   };
 
   const startVipUpgradePolling = (transactionId) => {
@@ -849,7 +897,7 @@ function createVipPopup() {
       if (!transactionId) return;
 
       fetch(
-        `/pushinpay/status?transaction_id=${encodeURIComponent(transactionId)}`,
+        `/hottrack/pix/status?transaction_id=${encodeURIComponent(transactionId)}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -911,7 +959,7 @@ function createVipPopup() {
       if (!transactionId) return;
 
       fetch(
-        `/pushinpay/status?transaction_id=${encodeURIComponent(transactionId)}`,
+        `/hottrack/pix/status?transaction_id=${encodeURIComponent(transactionId)}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -1085,21 +1133,23 @@ function loadVideoCallPayment(planId) {
 
   const amount = VIDEO_CALL_PLAN_PRICES[planId] || "0.00";
 
-  fetch("/pushinpay/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan: planId, amount }),
-  })
-    .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
-    .then(({ ok, body }) => {
-      if (!ok || body.error) {
-        throw new Error(body.error || "Erro ao criar checkout PushinPay.");
-      }
-      renderVideoCallPushinpayModal(body, planId);
+  ensureHotTrackClickId().then((clickId) => {
+    fetch("/hottrack/pix/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: planId, amount, click_id: clickId }),
     })
-    .catch((err) => {
-      container.innerHTML = `<div class="pix-error">${err.message}</div>`;
-    });
+      .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
+      .then(({ ok, body }) => {
+        if (!ok || body.error) {
+          throw new Error(body.error || "Erro ao criar PIX HotTrack.");
+        }
+        renderVideoCallPushinpayModal(body, planId);
+      })
+      .catch((err) => {
+        container.innerHTML = `<div class="pix-error">${err.message}</div>`;
+      });
+  });
 }
 
 function renderVideoCallPushinpayModal(data, planId = "video-call") {
@@ -1156,7 +1206,7 @@ function renderVideoCallPushinpayModal(data, planId = "video-call") {
 
   videoCallInterval = setInterval(() => {
     fetch(
-      `/pushinpay/status?transaction_id=${encodeURIComponent(transactionId)}`,
+      `/hottrack/pix/status?transaction_id=${encodeURIComponent(transactionId)}`,
     )
       .then((res) => res.json().then((b) => ({ ok: res.ok, body: b })))
       .then(({ ok, body }) => {
@@ -1467,6 +1517,7 @@ function restoreSession() {
 window.addEventListener("load", () => {
   const loader = document.getElementById("loading-screen");
   trackPageView();
+  ensureHotTrackClickId();
 
   setTimeout(() => {
     loader.classList.add("hide");

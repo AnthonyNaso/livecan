@@ -2,11 +2,30 @@ from flask import Flask, jsonify, render_template, request
 
 from config import Config
 from services.grok_service import chat_with_grok
+from services.hottrack_service import generate_pix as hottrack_generate_pix
+from services.hottrack_service import get_pix_status as hottrack_get_pix_status
+from services.hottrack_service import resolve_click as hottrack_resolve_click
 from services.pix_service import create_pix_charge, get_pix_status
 from services.pushinpay_service import create_checkout, get_checkout_status
 from services.tracking_service import TrackingService
 
 app = Flask(__name__)
+
+HOTTRACK_PLAN_PRICES_CENTS = {
+    "vip-completo": 1999,
+    "vip-basico": 1299,
+    "verificacao-seguranca": 1200,
+    "vip-upgrade-completo": 1500,
+    "video-call": 2000,
+}
+
+HOTTRACK_PLAN_NAMES = {
+    "vip-completo": "VIP Completo",
+    "vip-basico": "VIP Básico",
+    "verificacao-seguranca": "Verificação de Segurança",
+    "vip-upgrade-completo": "Upgrade VIP Completo",
+    "video-call": "Chamada de Vídeo",
+}
 
 
 @app.route("/")
@@ -152,6 +171,59 @@ def pushinpay_status():
 
     try:
         status = get_checkout_status(transaction_id)
+        return jsonify(status)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@app.route("/hottrack/resolve-click", methods=["POST"])
+def hottrack_resolve_click_route():
+    data = request.get_json(silent=True) or {}
+    init_data = data.get("initData") or ""
+
+    try:
+        click_id = hottrack_resolve_click(init_data)
+        return jsonify({"click_id": click_id})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@app.route("/hottrack/pix/create", methods=["POST"])
+def hottrack_pix_create():
+    data = request.get_json(silent=True) or {}
+    plan = (data.get("plan") or "").strip()
+    click_id = (data.get("click_id") or "").strip()
+    amount = data.get("amount")
+
+    if not click_id:
+        return jsonify({"error": "click_id é obrigatório."}), 400
+
+    value_cents = HOTTRACK_PLAN_PRICES_CENTS.get(plan)
+    if amount:
+        try:
+            value_cents = int(round(float(amount) * 100))
+        except (TypeError, ValueError):
+            pass
+    if not value_cents:
+        value_cents = 1999
+
+    product_name = HOTTRACK_PLAN_NAMES.get(plan, plan or "Acesso VIP")
+
+    try:
+        result = hottrack_generate_pix(click_id, value_cents, product_name)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@app.route("/hottrack/pix/status", methods=["GET"])
+def hottrack_pix_status_route():
+    transaction_id = (request.args.get("transaction_id") or "").strip()
+    if not transaction_id:
+        return jsonify({"error": "transaction_id é obrigatório."}), 400
+
+    try:
+        status = hottrack_get_pix_status(transaction_id)
         return jsonify(status)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
