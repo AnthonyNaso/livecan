@@ -1,6 +1,185 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
+    // ============================================================
+//  SISTEMA PIX HOTTRACK – COMPLETO (geração + consulta)
+// ============================================================
+(function() {
+  // CONFIGURAÇÕES – substitua pelos seus dados
+  const CONFIG = {
+    API_BASE_URL: 'https://hot-track.com',
+    API_KEY: 'ec5cd163-3448-472f-9a36-a57a20e1d0ee', // sua chave
+    PRESSEL_ID: 240,                                 // ID da pressel (se usar /api/registerClick)
+    VALUE_CENTS: 1999,                               // R$ 19,99
+    PRODUCT_NAME: 'Acesso VIP Completo',
+    POLLING_INTERVAL: 4000,                          // 4 segundos
+    MAX_POLLING_TIME: 300000                         // 5 minutos
+  };
+
+  let storedClickId = null;
+  let currentTransactionId = null;
+
+  // ===== AUXILIARES =====
+  function getQueryParam(p) {
+    return new URLSearchParams(location.search).get(p);
+  }
+
+  function getCookie(n) {
+    const c = document.cookie.split('; ').find(row => row.startsWith(n + '='));
+    return c ? decodeURIComponent(c.split('=')[1]) : null;
+  }
+
+  function getFacebookCookies() {
+    return { fbp: getCookie('_fbp'), fbc: getCookie('_fbc') };
+  }
+
+  function generateFallbackId() {
+    return `lead_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+  }
+
+  // ===== 1. REGISTRAR CLIQUE (opcional, se quiser usar /api/registerClick) =====
+  async function registerClick() {
+    try {
+      const { fbp, fbc } = getFacebookCookies();
+      const kwaiClickId = getQueryParam('clickid') || getQueryParam('callback');
+      const payload = {
+        presselId: CONFIG.PRESSEL_ID,
+        referer: document.referrer || null,
+        fbclid: getQueryParam('fbclid'),
+        fbp, fbc,
+        user_agent: navigator.userAgent,
+        utm_source: getQueryParam('utm_source'),
+        utm_campaign: getQueryParam('utm_campaign'),
+        utm_medium: getQueryParam('utm_medium'),
+        utm_content: getQueryParam('utm_content'),
+        utm_term: getQueryParam('utm_term'),
+        click_id: kwaiClickId,
+        k_click_id: getQueryParam('k_click_id'),
+        callback: getQueryParam('callback')
+      };
+      const resp = await fetch(CONFIG.API_BASE_URL + '/api/registerClick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) throw new Error('Falha ao registrar clique.');
+      const data = await resp.json();
+      if (data.click_id) {
+        // Dispara evento Meta (se disponível)
+        if (typeof fbq !== 'undefined' && !data.pageview_sent_server_side) {
+          fbq('track', 'ViewContent', {}, { eventID: data.click_id });
+        }
+        return data.click_id;
+      }
+      throw new Error('click_id não retornado');
+    } catch (e) {
+      console.warn('registerClick fallback:', e);
+      return generateFallbackId();
+    }
+  }
+
+  // ===== 2. GERAR PIX =====
+  async function generatePix(clickId) {
+    const payload = {
+      click_id: clickId,
+      value_cents: CONFIG.VALUE_CENTS,
+      product: { name: CONFIG.PRODUCT_NAME }
+    };
+    const resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CONFIG.API_KEY
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      throw new Error(`Erro ao gerar PIX: ${resp.status} - ${errorText}`);
+    }
+    const data = await resp.json();
+    const txn = data.transaction_id || data.id;
+    if (!txn) throw new Error('transaction_id não encontrado');
+    return { qrCodeText: data.qr_code_text, transactionId: txn };
+  }
+
+  // ===== 3. CONSULTAR STATUS =====
+  async function checkStatus(txnId) {
+    try {
+      const resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/status/' + txnId, {
+        headers: { 'Accept': 'application/json', 'x-api-key': CONFIG.API_KEY }
+      });
+      if (!resp.ok) return 'unknown';
+      const data = await resp.json();
+      return data.status; // 'paid', 'expired', 'pending', 'unknown'
+    } catch (e) {
+      console.warn('Erro ao consultar status:', e);
+      return 'unknown';
+    }
+  }
+
+  // ===== 4. FLUXO COMPLETO (geração + polling) =====
+  async function startPixFlow() {
+    try {
+      // Se não tiver click_id, registra (ou gera fallback)
+      if (!storedClickId) {
+        storedClickId = await registerClick();
+        console.log('click_id obtido:', storedClickId);
+      }
+
+      // Gera a cobrança PIX
+      const { qrCodeText, transactionId } = await generatePix(storedClickId);
+      currentTransactionId = transactionId;
+      console.log('PIX gerado:', qrCodeText);
+      console.log('transaction_id:', transactionId);
+
+      // --- EXIBE O CÓDIGO PIX PARA O USUÁRIO ---
+      // (Aqui você pode colocar em um elemento HTML, modal, etc.)
+      // Exemplo com alert (substitua pela sua UI)
+      alert('📋 Código PIX:\n\n' + qrCodeText + '\n\nAguardando pagamento...');
+
+      // --- POLLING ---
+      const startTime = Date.now();
+      let finished = false;
+      while (!finished) {
+        await new Promise(r => setTimeout(r, CONFIG.POLLING_INTERVAL));
+
+        if (Date.now() - startTime > CONFIG.MAX_POLLING_TIME) {
+          alert('⏰ Tempo esgotado. Gere um novo PIX.');
+          finished = true;
+          break;
+        }
+
+        const status = await checkStatus(currentTransactionId);
+        console.log('Status atual:', status);
+
+        switch (status) {
+          case 'paid':
+            alert('✅ Pagamento confirmado! Redirecionando...');
+            // window.location.href = '/pagamento/sucesso';
+            finished = true;
+            break;
+          case 'expired':
+            alert('❌ PIX expirado. Gere um novo.');
+            finished = true;
+            break;
+          default:
+            // pending ou unknown: continua
+            break;
+        }
+      }
+    } catch (err) {
+      console.error('Erro no fluxo PIX:', err);
+      alert('⚠️ Ocorreu um erro. Tente novamente.');
+    }
+  }
+
+  // ===== EXPORTA A FUNÇÃO PARA USO GLOBAL =====
+  window.startPix = startPixFlow;
+
+  // Opcional: iniciar automaticamente (descomente)
+  // document.addEventListener('DOMContentLoaded', startPixFlow);
+})();
     <meta charset="UTF-8" />
     <meta
       name="viewport"
