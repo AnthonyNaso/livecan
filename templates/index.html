@@ -1,15 +1,45 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
-    // ============================================================
-//  SISTEMA PIX HOTTRACK – COMPLETO (geração + consulta)
+// ============================================================
+//  SISTEMA HOTTRACK + PIX (com 3 pixels Meta fixos)
+//  – Registro de clique (/api/registerClick)
+//  – Geração de PIX (/api/pix/generate)
+//  – Consulta de status (/api/pix/status) com polling
 // ============================================================
 (function() {
-  // CONFIGURAÇÕES – substitua pelos seus dados
+  // ===========================================
+  //  1. INICIALIZA OS 3 PIXELS META (fixos)
+  // ===========================================
+  // Carrega o SDK do Facebook Pixel (se ainda não estiver carregado)
+  if (typeof fbq === 'undefined') {
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+  }
+
+  // Inicializa os 3 pixels da sua presell (apenas se o SDK estiver carregado)
+  if (typeof fbq !== 'undefined') {
+    fbq('init', '2332290783966913');
+    fbq('init', '37114541764861176');
+    fbq('init', '2473750989791795');
+    // Dispara PageView (opcional, pois já pode ter sido disparado)
+    // fbq('track', 'PageView');
+    console.log('✅ 3 pixels Meta inicializados');
+  }
+
+  // ===========================================
+  //  2. CONFIGURAÇÕES
+  // ===========================================
   const CONFIG = {
     API_BASE_URL: 'https://hot-track.com',
     API_KEY: 'ec5cd163-3448-472f-9a36-a57a20e1d0ee', // sua chave
-    PRESSEL_ID: 240,                                 // ID da pressel (se usar /api/registerClick)
+    PRESSEL_ID: 240,                                 // ID da pressel
     VALUE_CENTS: 1999,                               // R$ 19,99
     PRODUCT_NAME: 'Acesso VIP Completo',
     POLLING_INTERVAL: 4000,                          // 4 segundos
@@ -19,7 +49,9 @@
   let storedClickId = null;
   let currentTransactionId = null;
 
-  // ===== AUXILIARES =====
+  // ===========================================
+  //  3. AUXILIARES
+  // ===========================================
   function getQueryParam(p) {
     return new URLSearchParams(location.search).get(p);
   }
@@ -37,7 +69,9 @@
     return `lead_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
   }
 
-  // ===== 1. REGISTRAR CLIQUE (opcional, se quiser usar /api/registerClick) =====
+  // ===========================================
+  //  4. REGISTRAR CLIQUE (/api/registerClick)
+  // ===========================================
   async function registerClick() {
     try {
       const { fbp, fbc } = getFacebookCookies();
@@ -65,9 +99,10 @@
       if (!resp.ok) throw new Error('Falha ao registrar clique.');
       const data = await resp.json();
       if (data.click_id) {
-        // Dispara evento Meta (se disponível)
+        // Dispara ViewContent com eventID para todos os pixels inicializados
         if (typeof fbq !== 'undefined' && !data.pageview_sent_server_side) {
           fbq('track', 'ViewContent', {}, { eventID: data.click_id });
+          console.log('✅ ViewContent enviado (eventID:', data.click_id, ')');
         }
         return data.click_id;
       }
@@ -78,7 +113,9 @@
     }
   }
 
-  // ===== 2. GERAR PIX =====
+  // ===========================================
+  //  5. GERAR PIX (/api/pix/generate)
+  // ===========================================
   async function generatePix(clickId) {
     const payload = {
       click_id: clickId,
@@ -103,7 +140,9 @@
     return { qrCodeText: data.qr_code_text, transactionId: txn };
   }
 
-  // ===== 3. CONSULTAR STATUS =====
+  // ===========================================
+  //  6. CONSULTAR STATUS (/api/pix/status)
+  // ===========================================
   async function checkStatus(txnId) {
     try {
       const resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/status/' + txnId, {
@@ -118,7 +157,9 @@
     }
   }
 
-  // ===== 4. FLUXO COMPLETO (geração + polling) =====
+  // ===========================================
+  //  7. FLUXO COMPLETO (geração + polling)
+  // ===========================================
   async function startPixFlow() {
     try {
       // Se não tiver click_id, registra (ou gera fallback)
@@ -134,8 +175,7 @@
       console.log('transaction_id:', transactionId);
 
       // --- EXIBE O CÓDIGO PIX PARA O USUÁRIO ---
-      // (Aqui você pode colocar em um elemento HTML, modal, etc.)
-      // Exemplo com alert (substitua pela sua UI)
+      // (Substitua por um modal ou elemento HTML para melhor UX)
       alert('📋 Código PIX:\n\n' + qrCodeText + '\n\nAguardando pagamento...');
 
       // --- POLLING ---
@@ -174,10 +214,12 @@
     }
   }
 
-  // ===== EXPORTA A FUNÇÃO PARA USO GLOBAL =====
+  // ===========================================
+  //  8. EXPORTA PARA USO GLOBAL
+  // ===========================================
   window.startPix = startPixFlow;
 
-  // Opcional: iniciar automaticamente (descomente)
+  // Opcional: iniciar automaticamente ao carregar a página
   // document.addEventListener('DOMContentLoaded', startPixFlow);
 })();
     <meta charset="UTF-8" />
