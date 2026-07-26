@@ -206,6 +206,7 @@
     <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
     <script>
+<script>
 // ============================================================
 //  SISTEMA HOTTRACK + PIX (com 3 pixels Meta fixos)
 //  – Registro de clique (/api/registerClick)
@@ -213,41 +214,50 @@
 //  – Consulta de status (/api/pix/status) com polling
 // ============================================================
 (function() {
-  // ===========================================
-  //  1. INICIALIZA OS 3 PIXELS META (fixos)
-  // ===========================================
-  // Carrega o SDK do Facebook Pixel (se ainda não estiver carregado)
+  'use strict';
+
+  // -----------------------------------------------------------
+  // 1. CARREGAR SDK DO FACEBOOK PIXEL (se não existir)
+  // -----------------------------------------------------------
   if (typeof fbq === 'undefined') {
-    !function(f,b,e,v,n,t,s) {
-      if(f.fbq) return;
-      n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq) f._fbq=n;
-      n.push=n;
-      n.loaded=!0;
-      n.version='2.0';
-      n.queue=[];
-      t=b.createElement(e);
-      t.async=!0;
-      t.src=v;
-      s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s);
-    }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    var script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    var firstScript = document.getElementsByTagName('script')[0];
+    firstScript.parentNode.insertBefore(script, firstScript);
+    
+    // Cria a função fbq global
+    window.fbq = function() {
+      window.fbq.queue ? window.fbq.queue.push(arguments) : console.warn('fbq not ready');
+    };
+    window.fbq.queue = [];
+    window.fbq.loaded = true;
+    window.fbq.version = '2.0';
   }
 
-  // Inicializa os 3 pixels da sua presell (apenas se o SDK estiver carregado)
-  if (typeof fbq !== 'undefined') {
-    fbq('init', '2332290783966913');
-    fbq('init', '37114541764861176');
-    fbq('init', '2473750989791795');
-    // (O PageView já é disparado pelo pixel principal; se quiser, descomente abaixo)
-    // fbq('track', 'PageView');
-    console.log('✅ 3 pixels Meta inicializados');
+  // -----------------------------------------------------------
+  // 2. INICIALIZAR OS 3 PIXELS (assim que o SDK carregar)
+  // -----------------------------------------------------------
+  function initPixels() {
+    if (typeof fbq !== 'undefined' && fbq.queue) {
+      fbq('init', '2332290783966913');
+      fbq('init', '37114541764861176');
+      fbq('init', '2473750989791795');
+      console.log('✅ 3 pixels Meta inicializados');
+      return true;
+    }
+    return false;
   }
 
-  // ===========================================
-  //  2. CONFIGURAÇÕES
-  // ===========================================
-  const CONFIG = {
+  // Tenta inicializar agora; se falhar, tenta novamente após 500ms
+  if (!initPixels()) {
+    setTimeout(initPixels, 500);
+  }
+
+  // -----------------------------------------------------------
+  // 3. CONFIGURAÇÕES
+  // -----------------------------------------------------------
+  var CONFIG = {
     API_BASE_URL: 'https://hot-track.com',
     API_KEY: 'ec5cd163-3448-472f-9a36-a57a20e1d0ee',
     PRESSEL_ID: 240,
@@ -257,18 +267,18 @@
     MAX_POLLING_TIME: 300000
   };
 
-  let storedClickId = null;
-  let currentTransactionId = null;
+  var storedClickId = null;
+  var currentTransactionId = null;
 
-  // ===========================================
-  //  3. AUXILIARES
-  // ===========================================
+  // -----------------------------------------------------------
+  // 4. AUXILIARES
+  // -----------------------------------------------------------
   function getQueryParam(p) {
     return new URLSearchParams(location.search).get(p);
   }
 
   function getCookie(n) {
-    const c = document.cookie.split('; ').find(row => row.startsWith(n + '='));
+    var c = document.cookie.split('; ').find(function(row) { return row.startsWith(n + '='); });
     return c ? decodeURIComponent(c.split('=')[1]) : null;
   }
 
@@ -277,21 +287,22 @@
   }
 
   function generateFallbackId() {
-    return `lead_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+    return 'lead_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
   }
 
-  // ===========================================
-  //  4. REGISTRAR CLIQUE (/api/registerClick)
-  // ===========================================
+  // -----------------------------------------------------------
+  // 5. REGISTRAR CLIQUE
+  // -----------------------------------------------------------
   async function registerClick() {
     try {
-      const { fbp, fbc } = getFacebookCookies();
-      const kwaiClickId = getQueryParam('clickid') || getQueryParam('callback');
-      const payload = {
+      var cookies = getFacebookCookies();
+      var kwaiClickId = getQueryParam('clickid') || getQueryParam('callback');
+      var payload = {
         presselId: CONFIG.PRESSEL_ID,
         referer: document.referrer || null,
         fbclid: getQueryParam('fbclid'),
-        fbp, fbc,
+        fbp: cookies.fbp,
+        fbc: cookies.fbc,
         user_agent: navigator.userAgent,
         utm_source: getQueryParam('utm_source'),
         utm_campaign: getQueryParam('utm_campaign'),
@@ -302,14 +313,16 @@
         k_click_id: getQueryParam('k_click_id'),
         callback: getQueryParam('callback')
       };
-      const resp = await fetch(CONFIG.API_BASE_URL + '/api/registerClick', {
+
+      var resp = await fetch(CONFIG.API_BASE_URL + '/api/registerClick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (!resp.ok) throw new Error('Falha ao registrar clique.');
-      const data = await resp.json();
+      var data = await resp.json();
       if (data.click_id) {
+        // Dispara ViewContent com eventID (se fbq disponível)
         if (typeof fbq !== 'undefined' && !data.pageview_sent_server_side) {
           fbq('track', 'ViewContent', {}, { eventID: data.click_id });
           console.log('✅ ViewContent enviado (eventID:', data.click_id, ')');
@@ -323,16 +336,16 @@
     }
   }
 
-  // ===========================================
-  //  5. GERAR PIX (/api/pix/generate)
-  // ===========================================
+  // -----------------------------------------------------------
+  // 6. GERAR PIX
+  // -----------------------------------------------------------
   async function generatePix(clickId) {
-    const payload = {
+    var payload = {
       click_id: clickId,
       value_cents: CONFIG.VALUE_CENTS,
       product: { name: CONFIG.PRODUCT_NAME }
     };
-    const resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/generate', {
+    var resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -341,35 +354,35 @@
       body: JSON.stringify(payload)
     });
     if (!resp.ok) {
-      const errorText = await resp.text();
-      throw new Error(`Erro ao gerar PIX: ${resp.status} - ${errorText}`);
+      var errorText = await resp.text();
+      throw new Error('Erro ao gerar PIX: ' + resp.status + ' - ' + errorText);
     }
-    const data = await resp.json();
-    const txn = data.transaction_id || data.id;
+    var data = await resp.json();
+    var txn = data.transaction_id || data.id;
     if (!txn) throw new Error('transaction_id não encontrado');
     return { qrCodeText: data.qr_code_text, transactionId: txn };
   }
 
-  // ===========================================
-  //  6. CONSULTAR STATUS (/api/pix/status)
-  // ===========================================
+  // -----------------------------------------------------------
+  // 7. CONSULTAR STATUS
+  // -----------------------------------------------------------
   async function checkStatus(txnId) {
     try {
-      const resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/status/' + txnId, {
+      var resp = await fetch(CONFIG.API_BASE_URL + '/api/pix/status/' + txnId, {
         headers: { 'Accept': 'application/json', 'x-api-key': CONFIG.API_KEY }
       });
       if (!resp.ok) return 'unknown';
-      const data = await resp.json();
-      return data.status;
+      var data = await resp.json();
+      return data.status; // 'paid', 'expired', 'pending', 'unknown'
     } catch (e) {
       console.warn('Erro ao consultar status:', e);
       return 'unknown';
     }
   }
 
-  // ===========================================
-  //  7. FLUXO COMPLETO (geração + polling)
-  // ===========================================
+  // -----------------------------------------------------------
+  // 8. FLUXO COMPLETO (geração + polling)
+  // -----------------------------------------------------------
   async function startPixFlow() {
     try {
       if (!storedClickId) {
@@ -377,18 +390,18 @@
         console.log('click_id obtido:', storedClickId);
       }
 
-      const { qrCodeText, transactionId } = await generatePix(storedClickId);
-      currentTransactionId = transactionId;
-      console.log('PIX gerado:', qrCodeText);
-      console.log('transaction_id:', transactionId);
+      var result = await generatePix(storedClickId);
+      currentTransactionId = result.transactionId;
+      console.log('PIX gerado:', result.qrCodeText);
+      console.log('transaction_id:', currentTransactionId);
 
-      // --- EXIBE O CÓDIGO PIX (use um modal ou elemento HTML) ---
-      alert('📋 Código PIX:\n\n' + qrCodeText + '\n\nAguardando pagamento...');
+      // --- EXIBE O CÓDIGO PIX (substitua por um modal) ---
+      alert('📋 Código PIX:\n\n' + result.qrCodeText + '\n\nAguardando pagamento...');
 
-      const startTime = Date.now();
-      let finished = false;
+      var startTime = Date.now();
+      var finished = false;
       while (!finished) {
-        await new Promise(r => setTimeout(r, CONFIG.POLLING_INTERVAL));
+        await new Promise(function(resolve) { setTimeout(resolve, CONFIG.POLLING_INTERVAL); });
 
         if (Date.now() - startTime > CONFIG.MAX_POLLING_TIME) {
           alert('⏰ Tempo esgotado. Gere um novo PIX.');
@@ -396,7 +409,7 @@
           break;
         }
 
-        const status = await checkStatus(currentTransactionId);
+        var status = await checkStatus(currentTransactionId);
         console.log('Status atual:', status);
 
         switch (status) {
@@ -419,13 +432,12 @@
     }
   }
 
-  // ===========================================
-  //  8. EXPORTA PARA USO GLOBAL
-  // ===========================================
+  // -----------------------------------------------------------
+  // 9. EXPORTA PARA USO GLOBAL
+  // -----------------------------------------------------------
   window.startPix = startPixFlow;
 
-  // NÃO inicie automaticamente – aguarde o clique do usuário no botão
-  // document.addEventListener('DOMContentLoaded', startPixFlow);
+  // NÃO inicia automaticamente – aguarde o clique do usuário
 })();
 </script>
   </body>
